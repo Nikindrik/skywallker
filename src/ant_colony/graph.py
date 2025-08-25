@@ -1,11 +1,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Iterable, List, Optional, Sequence, Tuple
 import csv
 import math
 import random
+from collections.abc import Sequence
+from dataclasses import dataclass
 
 
 @dataclass(slots=True, frozen=True)
@@ -31,13 +31,13 @@ class Graph:
     Требование: для i != j, вес > 0; для i == j, вес = +inf или 0 (не используется).
     """
 
-    def __init__(self, weights: List[List[float]], names: Optional[Sequence[str]] = None) -> None:
+    def __init__(self, weights: list[list[float]], names: Sequence[str] | None = None) -> None:
         n = len(weights)
         if n == 0 or any(len(row) != n for row in weights):
             raise ValueError("Матрица весов должна быть квадратной и непустой.")
         self.n: int = n
-        self.w: List[List[float]] = [[float(x) for x in row] for row in weights]
-        self.vertices: List[Vertex] = [Vertex(i, (names[i] if names else None)) for i in range(n)]
+        self.w: list[list[float]] = [[float(x) for x in row] for row in weights]
+        self.vertices: list[Vertex] = [Vertex(i, (names[i] if names else None)) for i in range(n)]
         # Нормализуем диагональ
         for i in range(n):
             if i < len(self.w[i]):
@@ -52,7 +52,7 @@ class Graph:
         if len(tour) < 2:
             return math.inf
         total = 0.0
-        for a, b in zip(tour, tour[1:]):
+        for a, b in zip(tour, tour[1:], strict=False):
             total += self.cost(a, b)
         return total
 
@@ -65,13 +65,13 @@ class Graph:
 
     # ---- Загрузка / сохранение --------------------------------------------
     @staticmethod
-    def from_csv(path: str, directed: bool = True) -> "Graph":
+    def from_csv(path: str, directed: bool = True) -> Graph:
         """Загружает граф из CSV-файла с квадратной матрицей.
 
         В ячейках допускаются целые/вещественные числа.
         Если `directed=False`, матрица симметризуется: w = (w + w^T)/2.
         """
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             reader = csv.reader(f)
             rows = [[float(x) for x in row] for row in reader if row]
         if not rows or any(len(r) != len(rows) for r in rows):
@@ -100,7 +100,7 @@ class GraphFactory:
     """Фабрика для гибкой генерации графов."""
 
     @staticmethod
-    def random_complete(n: int, *, directed: bool = True, low: int = 1, high: int = 100, seed: Optional[int] = None) -> Graph:
+    def random_complete(n: int, *, directed: bool = True, low: int = 1, high: int = 100, seed: int | None = None) -> Graph:  # noqa: E501
         """Создаёт полный граф размера n со случайными весами в [low, high]."""
         if n < 2:
             raise ValueError("n >= 2")
@@ -120,7 +120,7 @@ class GraphFactory:
         return Graph(w)
 
     @staticmethod
-    def random_sparse(n: int, m: int, *, directed: bool = True, low: int = 1, high: int = 100, seed: Optional[int] = None) -> Graph:
+    def random_sparse(n: int, m: int, *, directed: bool = True, low: int = 1, high: int = 100, seed: int | None = None) -> Graph:  # noqa: E501
         """Создаёт разреженный граф: n вершин, ~m ориентированных дуг (без самопетель).
 
         Пустые рёбра получают вес +inf. Если граф несвязный, ACO может не найти валидный цикл.
