@@ -10,12 +10,13 @@ from dataclasses import dataclass
 
 @dataclass(slots=True, frozen=True)
 class Vertex:
-    """Вершина графа.
+    '''
+    Вершина графа
 
     Attributes:
-        idx: Порядковый индекс вершины [0..n-1].
-        name: Читаемое имя (необязательно).
-    """
+        idx: Порядковый индекс вершины [0..n-1]
+        name: Читаемое имя (необязательно)
+    '''
     idx: int
     name: str | None = None
 
@@ -24,12 +25,13 @@ class Vertex:
 
 
 class Graph:
-    """Взвешенный ориентированный граф для задачи коммивояжёра.
+    '''
+    Взвешенный ориентированный граф для задачи коммивояжёра
 
-    Хранит матрицу смежности `w[i][j]` (стоимость перехода i->j).
-    Допускает асимметрию (w[i][j] != w[j][i]).
-    Требование: для i != j, вес > 0; для i == j, вес = +inf или 0 (не используется).
-    """
+    Хранит матрицу смежности `w[i][j]` (стоимость перехода i->j)
+    Допускает асимметрию (w[i][j] != w[j][i])
+    Требование: для i != j, вес > 0; для i == j, вес = +inf или 0 (не используется)
+    '''
 
     def __init__(self, weights: list[list[float]], names: Sequence[str] | None = None) -> None:
         n = len(weights)
@@ -48,7 +50,7 @@ class Graph:
         return self.w[i][j]
 
     def tour_cost(self, tour: Sequence[int]) -> float:
-        """Стоимость маршрута (замкнутого)."""
+        '''Стоимость маршрута (замкнутого)'''
         if len(tour) < 2:
             return math.inf
         total = 0.0
@@ -66,11 +68,11 @@ class Graph:
     # ---- Загрузка / сохранение --------------------------------------------
     @staticmethod
     def from_csv(path: str, directed: bool = True) -> Graph:
-        """Загружает граф из CSV-файла с квадратной матрицей.
+        '''Загружает граф из CSV-файла с квадратной матрицей
 
         В ячейках допускаются целые/вещественные числа.
-        Если `directed=False`, матрица симметризуется: w = (w + w^T)/2.
-        """
+        Если directed=False, матрица симметризуется: w = (w + w^T)/2
+        '''
         with open(path, encoding="utf-8") as f:
             reader = csv.reader(f)
             rows = [[float(x) for x in row] for row in reader if row]
@@ -90,6 +92,7 @@ class Graph:
         return Graph(rows)
 
     def to_csv(self, path: str) -> None:
+        '''Сохраняет граф в CSV-файл'''
         with open(path, "w", encoding="utf-8", newline="") as f:
             writer = csv.writer(f)
             for row in self.w:
@@ -97,11 +100,11 @@ class Graph:
 
 
 class GraphFactory:
-    """Фабрика для гибкой генерации графов."""
+    '''Фабрика для гибкой генерации графов'''
 
     @staticmethod
     def random_complete(n: int, *, directed: bool = True, low: int = 1, high: int = 100, seed: int | None = None) -> Graph:  # noqa: E501
-        """Создаёт полный граф размера n со случайными весами в [low, high]."""
+        '''Создаёт полный граф размера n со случайными весами в [low, high]'''
         if n < 2:
             raise ValueError("n >= 2")
         rng = random.Random(seed)
@@ -121,11 +124,11 @@ class GraphFactory:
 
     @staticmethod
     def random_sparse(n: int, m: int, *, directed: bool = True, low: int = 1, high: int = 100, seed: int | None = None) -> Graph:  # noqa: E501
-        """Создаёт разреженный граф: n вершин, ~m ориентированных дуг (без самопетель).
+        '''Создаёт разреженный граф: n вершин, ~m ориентированных дуг (без самопетель)
 
-        Пустые рёбра получают вес +inf. Если граф несвязный, ACO может не найти валидный цикл.
-        Для TSP обычно используют полный граф; этот метод полезен для экспериментов.
-        """
+        Пустые рёбра получают вес +inf. Если граф несвязный, ACO может не найти валидный цикл
+        Для TSP обычно используют полный граф; этот метод полезен для экспериментов
+        '''
         if n < 2:
             raise ValueError("n >= 2")
         max_m = n * (n - 1) if directed else n * (n - 1) // 2

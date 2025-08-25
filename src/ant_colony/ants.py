@@ -10,6 +10,17 @@ from .graph import Graph
 
 @dataclass(slots=True)
 class ACOParams:
+    '''
+    Параметры алгоритма муравьиной колонии
+
+    Attributes:
+        alpha: важность феромона
+        beta: важность эвристической информации (обратной стоимости)
+        rho: коэффициент испарения феромона (0 < rho < 1)
+        q: количество феромона, откладываемого муравьем
+        elitist_weight: вес элитного муравья (0 - без элитного муравья)
+        tau0: начальное значение феромона на ребрах
+    '''
     alpha: float = 1.0
     beta: float = 3.0
     rho: float = 0.5
@@ -19,11 +30,32 @@ class ACOParams:
 
 @dataclass(slots=True)
 class RunResult:
+    '''
+    Результат выполнения алгоритма муравьиной колонии
+
+    Attributes:
+        best_tour: лучший найденный тур (последовательность вершин)
+        best_cost: стоимость лучшего тура
+        iterations: количество выполненных итераций
+    '''
     best_tour: list[int]
     best_cost: float
     iterations: int
 
 class AntColony:
+    '''
+    Алгоритм муравьиной колонии для задачи коммивояжера
+
+    Attributes:
+        graph: объект графа (матрица стоимостей)
+        params: параметры алгоритма (ACOParams)
+        n_ants: количество муравьев (по умолчанию max(10, n), где n - число вершин)
+        n_iterations: количество итераций (по умолчанию 200)
+        start_vertex: начальная вершина для всех муравьев (по умолчанию None - случайная)
+        seed: зерно для генератора случайных чисел (по умолчанию None - системное время)
+        early_stop: количество итераций без улучшения для ранней остановки (по умолчанию None - не использовать)
+        verbose: вывод отладочной информации (по умолчанию True)
+    '''
     def __init__(self, graph: Graph, params: ACOParams | None=None, *, n_ants: int | None=None,
                  n_iterations:int=200, start_vertex:int | None=0, seed:int | None=None,
                  early_stop:int | None=None, verbose:bool=True) -> None:
@@ -40,6 +72,10 @@ class AntColony:
         self.eta=[[0.0 if i==j else (0.0 if not math.isfinite(graph.cost(i,j)) or graph.cost(i,j)<=0 else 1.0/graph.cost(i,j)) for j in range(n)] for i in range(n)]  # noqa: E501
 
     def run(self)->RunResult:
+        '''
+        Запуск алгоритма муравьиной колонии
+        Возвращает объект RunResult с результатами
+        '''
         best_tour=[]
         best_cost=math.inf
         n_no_improve=0
@@ -67,7 +103,7 @@ class AntColony:
             n_no_improve+=1
             self._evaporate()
             self._deposit(all_tours,all_costs,best_tour,best_cost)
-            if self.verbose and it % 100 == 0:
+            if self.verbose and it < 5: #% 100 == 0:
                 print(f"Итерация {it}: лучший {best_tour}, стоимость={best_cost}")
                 print("Феромоны:")
                 [print([round(x,3) for x in row]) for row in self.tau]
@@ -81,6 +117,9 @@ class AntColony:
         return RunResult(best_tour=best_tour,best_cost=best_cost,iterations=it)
 
     def _construct_tour(self,*,start:int)->list[int]:
+        '''
+        Построение тура одним муравьем, начиная с вершины start
+        '''
         n=self.g.n
         tour=[start]
         unvisited=set(range(n))
@@ -95,6 +134,16 @@ class AntColony:
         return tour
 
     def _choose_next(self,i:int,candidates:set[int])->int:
+        '''
+        Выбор следующей вершины из множества кандидатов, находясь в вершине i
+        Используется правило вероятностного выбора на основе феромона и эвристики
+
+        Attributes:
+            i: текущая вершина
+            candidates: множество доступных вершин для перехода
+        Returns:
+            выбранная вершина
+        '''
         alpha=self.params.alpha
         beta=self.params.beta
         rng=self.rng
@@ -118,6 +167,7 @@ class AntColony:
         return scores[-1][0]
 
     def _evaporate(self)->None:
+        '''Испарение феромонов на всех ребрах'''
         rho=self.params.rho
         n=self.g.n
         for i in range(n):
@@ -126,11 +176,20 @@ class AntColony:
                     self.tau[i][j]*=(1.0-rho)
 
     def _deposit(self,tours:Sequence[Sequence[int]],costs:Sequence[float],best_tour:Sequence[int],best_cost:float)->None:  # noqa: E501
-        q=self.params.q
+        '''
+        Откладывание феромонов муравьями на всех ребрах
+
+        Attributes:
+            tours: список туров всех муравьев
+            costs: список стоимостей туров всех муравьев
+            best_tour: лучший тур за все время
+            best_cost: стоимость лучшего тура за все время
+        '''
+        q = self.params.q
         elite=self.params.elitist_weight
         def add(path,amount):
             for a,b in zip(path,path[1:], strict=False):
-                if a!=b:
+                if a != b:
                     self.tau[a][b]+=amount
         for tour,cost in zip(tours,costs, strict=False):
             if math.isfinite(cost) and cost>0:

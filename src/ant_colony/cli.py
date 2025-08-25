@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Optional
+
+from .ants import ACOParams, AntColony
 from .graph import Graph, GraphFactory
-from .ants import AntColony, ACOParams
 
 
 def build_argparser() -> argparse.ArgumentParser:
+    '''Создаёт парсер аргументов командной строки'''
     p = argparse.ArgumentParser(
         prog="ant-colony-tsp",
         description="Муравьиный алгоритм (ACO) для TSP/ATSP: загрузка матрицы или генерация графа.",
@@ -45,7 +46,8 @@ def build_argparser() -> argparse.ArgumentParser:
     return p
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
+    '''Точка входа для ant_colony_tsp'''
     parser = build_argparser()
     args = parser.parse_args(argv)
 
