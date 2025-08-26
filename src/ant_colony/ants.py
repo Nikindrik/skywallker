@@ -61,7 +61,7 @@ class AntColony:
                  early_stop:int | None=None, verbose:bool=True) -> None:
         self.g=graph
         self.params=params or ACOParams()
-        self.n_ants=n_ants or max(1,graph.n)  # Если n_ants не задан, используем max(10, n)
+        self.n_ants=n_ants or max(1,graph.n)  # Если n_ants не задан, используется max(10, n)
         self.n_iterations=n_iterations
         self.start_vertex=start_vertex
         self.rng=random.Random(seed)

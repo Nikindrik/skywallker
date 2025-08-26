@@ -40,11 +40,12 @@ skywallker/
 │   └── ant_colony/
 │       ├── __init__.py
 │       ├── ants.py       # AntColony, ACOParams, RunResult
-│       └── graph.py      # Graph, Vertex, GraphFactory
-└── 
-└──
-└── pyproject.toml
+│       ├── graph.py      # Graph, Vertex, GraphFactory
+│       └── cli.py
+├── .gitignore
+├── .python-version
 ├── README.md
-└── 
-└──
+├── pyproject.toml
+├── run.py
+└── uv.lock
 ```
