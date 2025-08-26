@@ -69,7 +69,9 @@ class AntColony:
         self.verbose=verbose
         n=graph.n
         self.tau=[[self.params.tau0 if i!=j else 0.0 for j in range(n)] for i in range(n)]
-        self.eta=[[0.0 if i==j else (0.0 if not math.isfinite(graph.cost(i,j)) or graph.cost(i,j)<=0 else 1.0/graph.cost(i,j)) for j in range(n)] for i in range(n)]  # noqa: E501
+        self.eta = [[0.0 if i == j else 1.0/graph.cost(i,j)
+            if math.isfinite(graph.cost(i,j)) and graph.cost(i,j) > 0
+            else 0.0 for j in range(n)] for i in range(n)]
 
     def run(self)->RunResult:
         '''
@@ -103,7 +105,7 @@ class AntColony:
             n_no_improve+=1
             self._evaporate()
             self._deposit(all_tours,all_costs,best_tour,best_cost)
-            if self.verbose and it < 5: #% 100 == 0:
+            if self.verbose and it < 5:
                 print(f"Итерация {it}: лучший {best_tour}, стоимость={best_cost}")
                 print("Феромоны:")
                 [print([round(x,3) for x in row]) for row in self.tau]
@@ -116,24 +118,40 @@ class AntColony:
             [print([round(x,3) for x in row]) for row in self.tau]
         return RunResult(best_tour=best_tour,best_cost=best_cost,iterations=it)
 
-    def _construct_tour(self,*,start:int)->list[int]:
+    def _construct_tour(self, *, start: int) -> list[int]:
         '''
         Построение тура одним муравьем, начиная с вершины start
+        Attributes:
+            start: начальная вершина
+        Returns:
+            построенный тур (список вершин)
         '''
-        n=self.g.n
-        tour=[start]
-        unvisited=set(range(n))
+        n = self.g.n
+        tour = [start]
+        unvisited = set(range(n))
         unvisited.remove(start)
-        cur=start
+        cur = start
+
         while unvisited:
-            nxt=self._choose_next(cur,unvisited)
+            # Фильтр только достижимые вершины
+            reachable = {j for j in unvisited 
+                        if math.isfinite(self.g.cost(cur, j)) and self.g.cost(cur, j) > 0}
+            if not reachable:
+                #if self.verbose:
+                #    print(f"Предупреждение: вершина {cur} не имеет достижимых соседей")
+                break
+            nxt = self._choose_next(cur, reachable)
             tour.append(nxt)
             unvisited.remove(nxt)
-            cur=nxt
-        tour.append(start)
+            cur = nxt
+
+        # Цикл замыкания
+        if (math.isfinite(self.g.cost(tour[-1], start)) and
+            self.g.cost(tour[-1], start) > 0):
+            tour.append(start)
         return tour
 
-    def _choose_next(self,i:int,candidates:set[int])->int:
+    def _choose_next(self, i: int, candidates: set[int]) -> int:
         '''
         Выбор следующей вершины из множества кандидатов, находясь в вершине i
         Используется правило вероятностного выбора на основе феромона и эвристики
@@ -144,27 +162,35 @@ class AntColony:
         Returns:
             выбранная вершина
         '''
-        alpha=self.params.alpha
-        beta=self.params.beta
-        rng=self.rng
-        scores=[]
-        total=0.0
+        alpha = self.params.alpha
+        beta = self.params.beta
+        rng = self.rng
+
+        # Фильтр кандидатов - только с конечной стоимостью
+        valid_candidates = []
+        probabilities = []
+
         for j in candidates:
-            tau,eta=self.tau[i][j],self.eta[i][j]
-            score=(tau**alpha)*(eta**beta) if tau>0 and eta>0 else 0.0
-            scores.append((j,score))
-            total+=score
-        if total<=0:
-            return rng.choice(list(candidates))
-        r=rng.random()
-        cum=0.0
-        for j,score in scores:
-            if score==0:
+            # Что ребро существует и имеет конечную положительную стоимость
+            if not math.isfinite(self.g.cost(i, j)) or self.g.cost(i, j) <= 0:
                 continue
-            cum+=score/total
-            if r<=cum:
-                return j
-        return scores[-1][0]
+            # Вероятность выбора j
+            tau, eta = self.tau[i][j], self.eta[i][j]
+            score = (tau ** alpha) * (eta ** beta) if tau > 0 and eta > 0 else 0.0
+            valid_candidates.append(j)
+            probabilities.append(score)
+
+        if not valid_candidates:  # Если нет valid candidates, возвращается случайный из исходного множества
+            return rng.choice(list(candidates))
+        total = sum(probabilities)   # Нормализуем вероятности
+
+        # Если все вероятности нулевые, возвращается случайный из valid candidates
+        if total <= 0:
+            return rng.choice(valid_candidates)
+        normalized_probs = [p / total for p in probabilities]  # Нормализация и выбираем по правилу рулетки
+
+        # choices для чистоты
+        return rng.choices(valid_candidates, weights=normalized_probs, k=1)[0]
 
     def _evaporate(self)->None:
         '''Испарение феромонов на всех ребрах'''
@@ -175,7 +201,8 @@ class AntColony:
                 if i!=j:
                     self.tau[i][j]*=(1.0-rho)
 
-    def _deposit(self,tours:Sequence[Sequence[int]],costs:Sequence[float],best_tour:Sequence[int],best_cost:float)->None:  # noqa: E501
+    def _deposit(self, tours: Sequence[Sequence[int]], costs: Sequence[float],
+             best_tour: Sequence[int], best_cost: float) -> None:
         '''
         Откладывание феромонов муравьями на всех ребрах
 
@@ -186,13 +213,15 @@ class AntColony:
             best_cost: стоимость лучшего тура за все время
         '''
         q = self.params.q
-        elite=self.params.elitist_weight
-        def add(path,amount):
-            for a,b in zip(path,path[1:], strict=False):
-                if a != b:
-                    self.tau[a][b]+=amount
-        for tour,cost in zip(tours,costs, strict=False):
-            if math.isfinite(cost) and cost>0:
-                add(tour,q/cost)
-        if elite>0 and math.isfinite(best_cost) and best_cost>0:
-            add(best_tour,elite*q/best_cost)
+        elite = self.params.elitist_weight
+
+        def add(path, amount):
+            for a, b in zip(path, path[1:], strict=False):
+                if a != b and math.isfinite(self.g.cost(a, b)):
+                    self.tau[a][b] += amount
+
+        for tour, cost in zip(tours, costs, strict=False):
+            if math.isfinite(cost) and cost > 0:
+                add(tour, q / cost)
+        if elite > 0 and math.isfinite(best_cost) and best_cost > 0:
+            add(best_tour, elite * q / best_cost)
