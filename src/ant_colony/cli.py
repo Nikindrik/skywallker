@@ -69,8 +69,7 @@ def main(argv: list[str] | None = None) -> int:
     colony = AntColony(g, params=params, n_ants=args.ants, n_iterations=args.iters, start_vertex=start_vertex, seed=args.seed, early_stop=args.early_stop)
     res = colony.run()
 
-    path_labels = [g.vertices[i].label() for i in res.best_tour]
-    print("Лучший маршрут:", " -> ".join(map(str, res.best_tour)), "|", " -> ".join(path_labels))
+    print("\nЛучший маршрут:", " -> ".join(map(str, res.best_tour)))
     print("Стоимость:", int(res.best_cost) if float(res.best_cost).is_integer() else res.best_cost)
     print("Итераций:", res.iterations)
 

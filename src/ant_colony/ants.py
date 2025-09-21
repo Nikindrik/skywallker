@@ -61,7 +61,7 @@ class AntColony:
                  early_stop:int | None=None, verbose:bool=True) -> None:
         self.g=graph
         self.params=params or ACOParams()
-        self.n_ants=n_ants or max(1,graph.n)  # Если n_ants не задан, используется max(10, n)
+        self.n_ants=n_ants or max(10, graph.n)
         self.n_iterations=n_iterations
         self.start_vertex=start_vertex
         self.rng=random.Random(seed)
@@ -73,50 +73,73 @@ class AntColony:
             if math.isfinite(graph.cost(i,j)) and graph.cost(i,j) > 0
             else 0.0 for j in range(n)] for i in range(n)]
 
-    def run(self)->RunResult:
+    def run(self) -> RunResult:
         '''
         Запуск алгоритма муравьиной колонии
         Возвращает объект RunResult с результатами
         '''
-        best_tour=[]
-        best_cost=math.inf
-        n_no_improve=0
+        best_tour = []
+        best_cost = math.inf
+        n_no_improve = 0
+
         if self.verbose:
-            print("=== Параметры ===",self.params)
+            print("=== Параметры ===", self.params)
             print("Матрица расстояний:")
-            [print(["∞" if not math.isfinite(x) else round(x,2) for x in row]) for row in self.g.w]
+            [print(["∞" if not math.isfinite(x) else round(x, 2) for x in row]) for row in self.g.w]
             print("Начальные феромоны:")
-            [print([round(x,3) for x in row]) for row in self.tau]
-        for it in range(1,self.n_iterations+1):
-            all_tours=[]
-            all_costs=[]
+            [print([round(x, 3) for x in row]) for row in self.tau]
+            print()
+
+        for it in range(1, self.n_iterations + 1):
+            all_tours = []
+            all_costs = []
+
+            #if self.verbose and (it <= 3 or it > self.n_iterations - 3):
+            #    print(f"\n--- Итерация {it} ---")
+
+            # Обычные муравьи
             for ant_id in range(self.n_ants):
-                s=self.start_vertex if self.start_vertex is not None else self.rng.randrange(self.g.n)
-                tour=self._construct_tour(start=s)
-                cost=self.g.tour_cost(tour)
+                s = self.start_vertex if self.start_vertex is not None else self.rng.randrange(self.g.n)
+                tour = self._construct_tour(start=s)
+                cost = self.g.tour_cost(tour)
                 all_tours.append(tour)
                 all_costs.append(cost)
-                if it==1 and self.verbose:
-                    print(f"Муравей {ant_id+1}: {tour}, стоимость={cost}")
-                if cost<best_cost:
-                    best_cost=cost
-                    best_tour=tour
-                    n_no_improve=0
-            n_no_improve+=1
+
+                if self.verbose and (it <= 3 or it > self.n_iterations - 3):
+                    route_str = " -> ".join(map(str, tour))
+                    print(f"Муравей {ant_id+1}, маршрут {route_str}, стоимость={cost}")
+
+                if cost < best_cost:
+                    best_cost = cost
+                    best_tour = tour
+                    n_no_improve = 0
+
+            # Элитный муравей
+            if self.params.elitist_weight > 0 and best_tour:
+                all_tours.append(best_tour)
+                all_costs.append(best_cost)
+                if self.verbose and (it <= 3 or it > self.n_iterations - 3):
+                    route_str = " -> ".join(map(str, best_tour))
+                    print(f"Элитный муравей, маршрут {route_str}, стоимость={best_cost}")
+
+            n_no_improve += 1
+
+            # Испарение и откладывание феромона
             self._evaporate()
-            self._deposit(all_tours,all_costs,best_tour,best_cost)
-            if self.verbose and it < 5:
-                print(f"Итерация {it}: лучший {best_tour}, стоимость={best_cost}")
+            self._deposit(all_tours, all_costs, best_tour, best_cost)
+
+            if self.verbose and (it <= 3 or it > self.n_iterations - 3):
+                if it != self.n_iterations - 1:
+                    print(f"Итерация {it}: лучший {best_tour}, стоимость={best_cost}")
+                else:
+                    print(f"Итерация {it} итоговая: лучший {best_tour}, стоимость={best_cost}")
                 print("Феромоны:")
-                [print([round(x,3) for x in row]) for row in self.tau]
-            if self.early_stop and n_no_improve>=self.early_stop:
+                [print([round(x, 3) for x in row]) for row in self.tau]
+
+            if self.early_stop and n_no_improve >= self.early_stop:
                 break
-        if self.verbose:
-            print("=== Итог ===")
-            print(f"Лучший: {best_tour}, стоимость={best_cost}")
-            print("Финальные феромоны:")
-            [print([round(x,3) for x in row]) for row in self.tau]
-        return RunResult(best_tour=best_tour,best_cost=best_cost,iterations=it)
+
+        return RunResult(best_tour=best_tour, best_cost=best_cost, iterations=it)
 
     def _construct_tour(self, *, start: int) -> list[int]:
         '''
@@ -154,7 +177,8 @@ class AntColony:
     def _choose_next(self, i: int, candidates: set[int]) -> int:
         '''
         Выбор следующей вершины из множества кандидатов, находясь в вершине i
-        Используется правило вероятностного выбора на основе феромона и эвристики
+        Добавлено "разведывательное" поведение: с вероятностью epsilon
+        муравей выбирает случайную вершину, игнорируя феромоны
 
         Attributes:
             i: текущая вершина
@@ -166,31 +190,33 @@ class AntColony:
         beta = self.params.beta
         rng = self.rng
 
-        # Фильтр кандидатов - только с конечной стоимостью
+        epsilon = 0.1  # вероятность разведки 10%
+
+        if rng.random() < epsilon:  # Разведка: случайный выбор
+            return rng.choice(list(candidates))
+
+        # Нормальное вероятностное правило
         valid_candidates = []
         probabilities = []
 
         for j in candidates:
-            # Что ребро существует и имеет конечную положительную стоимость
             if not math.isfinite(self.g.cost(i, j)) or self.g.cost(i, j) <= 0:
                 continue
-            # Вероятность выбора j
             tau, eta = self.tau[i][j], self.eta[i][j]
             score = (tau ** alpha) * (eta ** beta) if tau > 0 and eta > 0 else 0.0
             valid_candidates.append(j)
             probabilities.append(score)
 
-        if not valid_candidates:  # Если нет valid candidates, возвращается случайный из исходного множества
+        if not valid_candidates:
             return rng.choice(list(candidates))
-        total = sum(probabilities)   # Нормализуем вероятности
 
-        # Если все вероятности нулевые, возвращается случайный из valid candidates
+        total = sum(probabilities)
         if total <= 0:
             return rng.choice(valid_candidates)
-        normalized_probs = [p / total for p in probabilities]  # Нормализация и выбираем по правилу рулетки
 
-        # choices для чистоты
+        normalized_probs = [p / total for p in probabilities]
         return rng.choices(valid_candidates, weights=normalized_probs, k=1)[0]
+
 
     def _evaporate(self)->None:
         '''Испарение феромонов на всех ребрах'''
